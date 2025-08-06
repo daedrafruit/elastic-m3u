@@ -1,21 +1,10 @@
-'''
-open m3u file
-read each path
-if a path is not broken, write/update a comment with its metadata
-
-if a path is broken, check if it has a metadata comment
-search the library for matching metadata
-
-if matching metadata is found, replace the path:
-'''
-
 import os
 from tinytag import TinyTag
 from pathlib import Path
 from collections import defaultdict
 import re
 
-library = Path("Library2/")
+library = Path("Library/")
 m3u_path = "test.m3u"
 audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
 
