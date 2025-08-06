@@ -3,14 +3,13 @@ from tinytag import TinyTag
 from pathlib import Path
 from collections import defaultdict
 import re
+import argparse
 
-library = Path("Library/")
-m3u_path = "test.m3u"
 audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
 
 metadata_path_cache = defaultdict(list)
 
-def build_cache():
+def build_cache(library):
     cached_files = 0
 
     paths = (path for path in library.glob(r'**/*') if path.suffix in audio_extentions and os.path.isfile(path))
@@ -38,7 +37,7 @@ def get_metadata(line):
 def get_comment(albumartist, year, album, artist, title):
     return str(f'# ALBUMARTIST="{albumartist}" YEAR="{year}" ARTIST="{artist}" ALBUM="{album}" TITLE="{title}"\n')
 
-def main():
+def process_m3u(m3u_path, library):
     tmp_path = ".tmp_m3u"
     if os.path.isfile(tmp_path): os.remove(tmp_path)
     tmp = open(tmp_path, "x")
@@ -66,7 +65,7 @@ def main():
         tags = get_metadata(prevline)
 
         if not cache_built: 
-            build_cache()
+            build_cache(library)
             cache_built = True
 
         matches = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])
@@ -78,4 +77,10 @@ def main():
     os.remove(m3u_path)
     os.rename(tmp_path, m3u_path)
 
-main()
+
+parser = argparse.ArgumentParser(prog='elastic-m3u')
+parser.add_argument('-l', '--library', required=True)
+parser.add_argument('-p', '--playlists', required=True)
+args = parser.parse_args()
+
+process_m3u(args.playlists, Path(args.library))
