@@ -41,7 +41,7 @@ def get_metadata(line):
 def get_comment(albumartist, year, album, artist, title):
     return str(f'# ALBUMARTIST="{albumartist}" YEAR="{year}" ARTIST="{artist}" ALBUM="{album}" TITLE="{title}"\n')
 
-def process_m3u(m3u_path, library):
+def process_m3u(m3u_path, library, relative):
     tmp_path = ".tmp_m3u"
     if os.path.isfile(tmp_path): os.remove(tmp_path)
     tmp = open(tmp_path, "x")
@@ -52,10 +52,12 @@ def process_m3u(m3u_path, library):
     lines = m3u.readlines()
     for line in lines:
         path = line.rstrip('\n')
+        fixed_path = os.path.abspath(os.path.join(Path(m3u_path).parent, path))
         is_metadata_comment = line.startswith("# ALBUMARTIST=")
         prev_is_metadata_comment = prevline.startswith("# ALBUMARTIST=")
         is_comment_or_blank = line.startswith("#") or line.isspace()
-        is_unbroken_path = os.path.isfile(path)
+
+        is_unbroken_path = os.path.isfile(fixed_path)
 
         if is_metadata_comment:
             prevline = line
@@ -67,7 +69,7 @@ def process_m3u(m3u_path, library):
             continue
 
         if is_unbroken_path:
-            tag: TinyTag = TinyTag.get(path)
+            tag: TinyTag = TinyTag.get(fixed_path)
             new_comment = get_comment(tag.albumartist, tag.year, tag.artist, tag.album, tag.title)
 
             tmp.write(new_comment)
@@ -84,11 +86,17 @@ def process_m3u(m3u_path, library):
         build_cache(library)
 
         tags = get_metadata(prevline)
-        found_path = str(search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])) + '\n'
+        found_path = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])[0]
+        rel_path = os.path.relpath(found_path, Path(m3u_path).parent) + '\n'
+        abs_path = os.path.abspath(rel_path)
         new_comment = (get_comment(tags["albumartist"], tags["year"], tags["artist"], tags["album"], tags["title"]))
 
         tmp.write(new_comment)
-        tmp.write(found_path)
+
+        if relative:
+            tmp.write(rel_path)
+        else:
+            tmp.write(abs_path)
 
         prevline = line
 
@@ -99,16 +107,16 @@ def process_m3u(m3u_path, library):
 parser = argparse.ArgumentParser(prog='elastic-m3u')
 parser.add_argument('-l', '--library', required=True)
 parser.add_argument('-p', '--playlists', required=True, nargs='*')
+parser.add_argument('-r', '--relative', action="store_true")
 args = parser.parse_args()
 
 cache_built = False
-
 for playlist_arg in args.playlists:
     if os.path.isfile(playlist_arg) and Path(playlist_arg).suffix == ".m3u":
-        process_m3u(playlist_arg, Path(args.library))
+        process_m3u(playlist_arg, Path(args.library), args.relative)
 
     else:
         playlists = (path for path in Path(playlist_arg).glob(r'**/*') if path.suffix == ".m3u" and os.path.isfile(path))
 
         for m3u in playlists:
-            print(str(m3u))
+            process_m3u(m3u, Path(args.library), args.relative)
