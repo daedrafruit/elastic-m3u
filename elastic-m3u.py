@@ -1,5 +1,4 @@
 import os
-from os.path import isdir
 from tinytag import TinyTag
 from pathlib import Path
 from collections import defaultdict
@@ -9,8 +8,11 @@ import argparse
 audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
 
 metadata_path_cache = defaultdict(list)
+global cache_built
 
 def build_cache(library):
+    global cache_built
+    if cache_built: return
     cached_files = 0
 
     paths = (path for path in library.glob(r'**/*') if path.suffix in audio_extentions and os.path.isfile(path))
@@ -26,6 +28,7 @@ def build_cache(library):
 
         cached_files += 1
         if cached_files % 100 == 0: print(f"Files cached: {cached_files}")
+    cache_built = True
 
 def search_cache(albumartist, year, album, artist, title):
     return list(set(metadata_path_cache[albumartist]) & set(metadata_path_cache[year]) & set(metadata_path_cache[artist]) & set(metadata_path_cache[album]) & set(metadata_path_cache[title]))
@@ -44,35 +47,48 @@ def process_m3u(m3u_path, library):
     tmp = open(tmp_path, "x")
     m3u = open(m3u_path)
 
-    cache_built = False
-
     prevline = ""
 
     lines = m3u.readlines()
     for line in lines:
+        path = line.rstrip('\n')
+        is_metadata_comment = line.startswith("# ALBUMARTIST=")
+        prev_is_metadata_comment = prevline.startswith("# ALBUMARTIST=")
+        is_comment_or_blank = line.startswith("#") or line.isspace()
+        is_unbroken_path = os.path.isfile(path)
 
-        
-        if line.startswith("#") or line.isspace():
+        if is_metadata_comment:
             prevline = line
             continue
 
-        path = line.rstrip('\n')
-        if os.path.isfile(path):
-            tag: TinyTag = TinyTag.get(path)
-            tmp.write(get_comment(tag.albumartist, tag.year, tag.artist, tag.album, tag.title))
+        if is_comment_or_blank:
             tmp.write(line)
             prevline = line
             continue
 
+        if is_unbroken_path:
+            tag: TinyTag = TinyTag.get(path)
+            new_comment = get_comment(tag.albumartist, tag.year, tag.artist, tag.album, tag.title)
+
+            tmp.write(new_comment)
+            tmp.write(line)
+            prevline = line
+            continue
+
+        if not prev_is_metadata_comment:
+            print("No metadata comment found for: " + line, end='')
+            tmp.write(line)
+            prevline = line
+            continue
+
+        build_cache(library)
+
         tags = get_metadata(prevline)
+        found_path = str(search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])) + '\n'
+        new_comment = (get_comment(tags["albumartist"], tags["year"], tags["artist"], tags["album"], tags["title"]))
 
-        if not cache_built: 
-            build_cache(library)
-            cache_built = True
-
-        matches = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])
-        tmp.write(get_comment(tags["albumartist"], tags["year"], tags["artist"], tags["album"], tags["title"]))
-        tmp.write(str(matches[0]) + "\n")
+        tmp.write(new_comment)
+        tmp.write(found_path)
 
         prevline = line
 
@@ -84,6 +100,8 @@ parser = argparse.ArgumentParser(prog='elastic-m3u')
 parser.add_argument('-l', '--library', required=True)
 parser.add_argument('-p', '--playlists', required=True, nargs='*')
 args = parser.parse_args()
+
+cache_built = False
 
 for playlist_arg in args.playlists:
     if os.path.isfile(playlist_arg) and Path(playlist_arg).suffix == ".m3u":
