@@ -1,3 +1,2 @@
 *.m3u
-venv/
-Library/
+*/

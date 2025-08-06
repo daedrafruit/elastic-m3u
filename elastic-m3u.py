@@ -1,4 +1,5 @@
 import os
+from os.path import isdir
 from tinytag import TinyTag
 from pathlib import Path
 from collections import defaultdict
@@ -50,7 +51,8 @@ def process_m3u(m3u_path, library):
     lines = m3u.readlines()
     for line in lines:
 
-        if line.startswith("#"):
+        
+        if line.startswith("#") or line.isspace():
             prevline = line
             continue
 
@@ -80,7 +82,15 @@ def process_m3u(m3u_path, library):
 
 parser = argparse.ArgumentParser(prog='elastic-m3u')
 parser.add_argument('-l', '--library', required=True)
-parser.add_argument('-p', '--playlists', required=True)
+parser.add_argument('-p', '--playlists', required=True, nargs='*')
 args = parser.parse_args()
 
-process_m3u(args.playlists, Path(args.library))
+for playlist_arg in args.playlists:
+    if os.path.isfile(playlist_arg) and Path(playlist_arg).suffix == ".m3u":
+        process_m3u(playlist_arg, Path(args.library))
+
+    else:
+        playlists = (path for path in Path(playlist_arg).glob(r'**/*') if path.suffix == ".m3u" and os.path.isfile(path))
+
+        for m3u in playlists:
+            print(str(m3u))
