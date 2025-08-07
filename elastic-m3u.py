@@ -30,25 +30,67 @@ def build_cache(libraries):
             cached_files += 1
             if cached_files % 100 == 0: print(f"Files cached: {cached_files}")
 
+    print(f"Total files cached: {cached_files}")
     cache_built = True
 
+
+
+
 def search_cache(albumartist, year, album, artist, title):
-    result = list(set(metadata_path_cache[albumartist]) & set(metadata_path_cache[year]) & set(metadata_path_cache[artist]) & set(metadata_path_cache[album]) & set(metadata_path_cache[title]))
-    if not result:
-        print(f"ERROR: could not find: ALBUMARTIST={albumartist}, YEAR={year}, ALBUM={album}, ARTIST={artist}, TITLE={title}")
-    return result
+    perfect_match = list(set(metadata_path_cache[albumartist]) & set(metadata_path_cache[year]) & set(metadata_path_cache[artist]) & set(metadata_path_cache[album]) & set(metadata_path_cache[title]))
+
+    if perfect_match: return perfect_match
+
+    match_scores = defaultdict(int) 
+    match_sets = {albumartist, year, album, artist, title}
+    max = ""
+    for match_set in match_sets:
+        for match in metadata_path_cache[match_set]:
+
+            match_scores[match] += 1
+
+            if match_set is not year:
+                match_scores[match] += 1
+
+            if match_scores[match] > match_scores[max] : max = match
+
+    print(f"\nCould not find perfect match for:\n    ALBUMARTIST={albumartist} YEAR={year} ALBUM={album} ARTIST={artist} TITLE={title}")
+    print("\n    Is '" + str(max) + "' OK? (y/n)")
+
+    response = input()
+    if response.lower() == "y":
+        return list({max})
+
+    sorted_matches = dict(sorted(match_scores.items(), key=lambda item: item[1], reverse=True))
+    i = 0
+    for match in sorted_matches: 
+        if sorted_matches[match] > 1:
+            print(str(i) + ": " + str(match) + " (" + str(sorted_matches[match]) + ")")
+            i += 1
+
+    print("\n    Select a value or (s)kip:")
+    response = input()
+
+    if response.lower() == "s":
+        print(f"ERROR: could not find match for: ALBUMARTIST={albumartist}, YEAR={year}, ALBUM={album}, ARTIST={artist}, TITLE={title}")
+        return list({})
+    
+    return list({list(sorted_matches)[int(response)]})
+
+
+
 
 def get_metadata(line):
     dict = defaultdict(list)
     dict["albumartist"] = line.split(" ALBUMARTIST=")[1].split(" YEAR=")[0]
-    dict["year"] = line.split(" YEAR=")[1].split(" ARTIST=")[0]
-    dict["artist"] = line.split(" ARTIST=")[1].split(" ALBUM=")[0]
-    dict["album"] = line.split(" ALBUM=")[1].split(" TITLE=")[0]
+    dict["year"] = line.split(" YEAR=")[1].split(" ALBUM=")[0]
+    dict["artist"] = line.split(" ALBUM=")[1].split(" ARTIST=")[0]
+    dict["album"] = line.split(" ARTIST=")[1].split(" TITLE=")[0]
     dict["title"] = line.split(" TITLE=")[1].rstrip("\n")
     return dict
 
 def get_comment(albumartist, year, album, artist, title):
-    return str(f'# ALBUMARTIST={albumartist} YEAR={year} ARTIST={artist} ALBUM={album} TITLE={title}\n')
+    return str(f'# ALBUMARTIST={albumartist} YEAR={year} ALBUM={artist} ARTIST={album} TITLE={title}\n')
 
 def process_m3u(m3u_path, libraries, relative):
     tmp_path = ".tmp_m3u"
@@ -106,15 +148,16 @@ def process_m3u(m3u_path, libraries, relative):
         found_path = found_paths[0]
 
         rel_path = os.path.relpath(found_path, Path(m3u_path).parent) + '\n'
-        abs_path = os.path.abspath(rel_path)
-        new_comment = (get_comment(tags["albumartist"], tags["year"], tags["artist"], tags["album"], tags["title"]))
+
+        tag: TinyTag = TinyTag.get(found_path)
+        new_comment = (get_comment(tag.albumartist, tag.year, tag.artist, tag.album, tag.title))
 
         tmp.write(new_comment)
 
         if relative:
             tmp.write(rel_path)
         else:
-            tmp.write(abs_path)
+            tmp.write(str(found_path) + "\n")
 
         prevline = line
 
