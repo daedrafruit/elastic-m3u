@@ -62,11 +62,9 @@ def search_cache(albumartist, year, album, artist, title):
         return list({max})
 
     sorted_matches = dict(sorted(match_scores.items(), key=lambda item: item[1], reverse=True))
-    i = 0
-    for match in sorted_matches: 
+    for i, match in enumerate(sorted_matches): 
         if sorted_matches[match] > 1:
             print(str(i) + ": " + str(match) + " (" + str(sorted_matches[match]) + ")")
-            i += 1
 
     print("\n    Select a value or (s)kip:")
     response = input()
