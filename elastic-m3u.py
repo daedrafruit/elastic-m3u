@@ -10,24 +10,27 @@ audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
 metadata_path_cache = defaultdict(list)
 global cache_built
 
-def build_cache(library):
+def build_cache(libraries):
     global cache_built
     if cache_built: return
     cached_files = 0
 
-    paths = (path for path in library.glob(r'**/*') if path.suffix in audio_extentions and os.path.isfile(path))
-    for path in paths:
+    for library in libraries:
+        print("Caching: " + str(Path(library)))
+        paths = (path for path in Path(library).glob(r'**/*') if path.suffix in audio_extentions and os.path.isfile(path))
+        for path in paths:
 
-        tag: TinyTag = TinyTag.get(path)
+            tag: TinyTag = TinyTag.get(path)
 
-        metadata_path_cache[tag.albumartist].append(path)
-        metadata_path_cache[tag.year].append(path)
-        metadata_path_cache[tag.album].append(path)
-        metadata_path_cache[tag.artist].append(path)
-        metadata_path_cache[tag.title].append(path)
+            metadata_path_cache[tag.albumartist].append(path)
+            metadata_path_cache[tag.year].append(path)
+            metadata_path_cache[tag.album].append(path)
+            metadata_path_cache[tag.artist].append(path)
+            metadata_path_cache[tag.title].append(path)
 
-        cached_files += 1
-        if cached_files % 100 == 0: print(f"Files cached: {cached_files}")
+            cached_files += 1
+            if cached_files % 100 == 0: print(f"Files cached: {cached_files}")
+
     cache_built = True
 
 def search_cache(albumartist, year, album, artist, title):
@@ -41,7 +44,7 @@ def get_metadata(line):
 def get_comment(albumartist, year, album, artist, title):
     return str(f'# ALBUMARTIST="{albumartist}" YEAR="{year}" ARTIST="{artist}" ALBUM="{album}" TITLE="{title}"\n')
 
-def process_m3u(m3u_path, library, relative):
+def process_m3u(m3u_path, libraries, relative):
     tmp_path = ".tmp_m3u"
     if os.path.isfile(tmp_path): os.remove(tmp_path)
     tmp = open(tmp_path, "x")
@@ -83,7 +86,7 @@ def process_m3u(m3u_path, library, relative):
             prevline = line
             continue
 
-        build_cache(library)
+        build_cache(libraries)
 
         tags = get_metadata(prevline)
         found_path = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])[0]
@@ -105,7 +108,7 @@ def process_m3u(m3u_path, library, relative):
 
 
 parser = argparse.ArgumentParser(prog='elastic-m3u')
-parser.add_argument('-l', '--library', required=True)
+parser.add_argument('-l', '--libraries', required=True, nargs='*')
 parser.add_argument('-p', '--playlists', required=True, nargs='*')
 parser.add_argument('-r', '--relative', action="store_true")
 args = parser.parse_args()
@@ -113,10 +116,10 @@ args = parser.parse_args()
 cache_built = False
 for playlist_arg in args.playlists:
     if os.path.isfile(playlist_arg) and Path(playlist_arg).suffix == ".m3u":
-        process_m3u(playlist_arg, Path(args.library), args.relative)
+        process_m3u(playlist_arg, args.libraries, args.relative)
 
     else:
         playlists = (path for path in Path(playlist_arg).glob(r'**/*') if path.suffix == ".m3u" and os.path.isfile(path))
 
         for m3u in playlists:
-            process_m3u(m3u, Path(args.library), args.relative)
+            process_m3u(m3u, args.libraries, args.relative)
