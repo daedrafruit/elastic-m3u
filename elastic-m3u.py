@@ -46,7 +46,6 @@ def get_metadata(line):
     dict["artist"] = line.split(" ARTIST=")[1].split(" ALBUM=")[0]
     dict["album"] = line.split(" ALBUM=")[1].split(" TITLE=")[0]
     dict["title"] = line.split(" TITLE=")[1].rstrip("\n")
-
     return dict
 
 def get_comment(albumartist, year, album, artist, title):
@@ -133,7 +132,7 @@ args = parser.parse_args()
 cache_built = False
 for playlist_arg in args.playlists:
     if os.path.isfile(playlist_arg) and Path(playlist_arg).suffix == ".m3u":
-        print("Processing: " + playlist_arg.name)
+        print("Processing: " + Path(playlist_arg).name)
         process_m3u(playlist_arg, args.libraries, args.relative)
 
     else:
