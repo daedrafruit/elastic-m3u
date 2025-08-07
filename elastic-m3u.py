@@ -34,15 +34,23 @@ def build_cache(libraries):
     cache_built = True
 
 def search_cache(albumartist, year, album, artist, title):
-    return list(set(metadata_path_cache[albumartist]) & set(metadata_path_cache[year]) & set(metadata_path_cache[artist]) & set(metadata_path_cache[album]) & set(metadata_path_cache[title]))
+    result = list(set(metadata_path_cache[albumartist]) & set(metadata_path_cache[year]) & set(metadata_path_cache[artist]) & set(metadata_path_cache[album]) & set(metadata_path_cache[title]))
+    if not result:
+        print(f"ERROR: could not find: ALBUMARTIST={albumartist}, YEAR={year}, ALBUM={album}, ARTIST={artist}, TITLE={title}")
+    return result
 
 def get_metadata(line):
-    pattern = r'(\w+)="([^"]*)"'
-    matches = re.findall(pattern, line)
-    return {key.lower(): value for key, value in matches}
+    dict = defaultdict(list)
+    dict["albumartist"] = line.split(" ALBUMARTIST=")[1].split(" YEAR=")[0]
+    dict["year"] = line.split(" YEAR=")[1].split(" ARTIST=")[0]
+    dict["artist"] = line.split(" ARTIST=")[1].split(" ALBUM=")[0]
+    dict["album"] = line.split(" ALBUM=")[1].split(" TITLE=")[0]
+    dict["title"] = line.split(" TITLE=")[1].rstrip("\n")
+
+    return dict
 
 def get_comment(albumartist, year, album, artist, title):
-    return str(f'# ALBUMARTIST="{albumartist}" YEAR="{year}" ARTIST="{artist}" ALBUM="{album}" TITLE="{title}"\n')
+    return str(f'# ALBUMARTIST={albumartist} YEAR={year} ARTIST={artist} ALBUM={album} TITLE={title}\n')
 
 def process_m3u(m3u_path, libraries, relative):
     tmp_path = ".tmp_m3u"
@@ -89,7 +97,16 @@ def process_m3u(m3u_path, libraries, relative):
         build_cache(libraries)
 
         tags = get_metadata(prevline)
-        found_path = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])[0]
+        found_paths = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])
+
+        if not found_paths:
+            tmp.write(prevline)
+            tmp.write(line)
+            prevline = line
+            continue
+
+        found_path = found_paths[0]
+
         rel_path = os.path.relpath(found_path, Path(m3u_path).parent) + '\n'
         abs_path = os.path.abspath(rel_path)
         new_comment = (get_comment(tags["albumartist"], tags["year"], tags["artist"], tags["album"], tags["title"]))
@@ -116,10 +133,12 @@ args = parser.parse_args()
 cache_built = False
 for playlist_arg in args.playlists:
     if os.path.isfile(playlist_arg) and Path(playlist_arg).suffix == ".m3u":
+        print("Processing: " + playlist_arg.name)
         process_m3u(playlist_arg, args.libraries, args.relative)
 
     else:
         playlists = (path for path in Path(playlist_arg).glob(r'**/*') if path.suffix == ".m3u" and os.path.isfile(path))
 
         for m3u in playlists:
+            print("Processing: " + m3u.name)
             process_m3u(m3u, args.libraries, args.relative)
