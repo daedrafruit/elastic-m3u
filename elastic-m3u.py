@@ -49,6 +49,9 @@ def search_cache(albumartist, year, album, artist, title):
 
             match_scores[match] += 1
 
+            '''
+            TODO: the ranking of imperfect matches works well enough, however it may have a bias towards matches where multiple tags share a value (ex: artist/albumartist), needs testing
+            '''
             if match_set is not year:
                 match_scores[match] += 1
 
@@ -64,7 +67,7 @@ def search_cache(albumartist, year, album, artist, title):
     sorted_matches = dict(sorted(match_scores.items(), key=lambda item: item[1], reverse=True))
     for i, match in enumerate(sorted_matches): 
         if sorted_matches[match] > 1:
-            print(str(i) + ": " + str(match) + " (" + str(sorted_matches[match]) + ")")
+            print(str(i) + ": " + str(match) + " (Confidence: " + str(sorted_matches[match]) + ")")
 
     print("\n    Select a value or (s)kip:")
     response = input()
