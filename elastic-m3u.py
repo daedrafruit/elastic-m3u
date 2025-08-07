@@ -2,7 +2,6 @@ import os
 from tinytag import TinyTag
 from pathlib import Path
 from collections import defaultdict
-import re
 import argparse
 
 audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
