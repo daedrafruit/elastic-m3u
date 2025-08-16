@@ -5,8 +5,10 @@ from collections import defaultdict
 import argparse
 
 audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
+metadata_path_cache = defaultdict(lambda: defaultdict(list))
+tag_types = ['albumartist', 'year', 'album', 'artist', 'title']
 
-metadata_path_cache = defaultdict(list)
+
 global cache_built
 
 def build_cache(libraries):
@@ -20,12 +22,13 @@ def build_cache(libraries):
         for path in paths:
 
             tag: TinyTag = TinyTag.get(path)
+            metadata: dict = tag.as_dict()
 
-            metadata_path_cache[tag.albumartist].append(path)
-            metadata_path_cache[tag.year].append(path)
-            metadata_path_cache[tag.album].append(path)
-            metadata_path_cache[tag.artist].append(path)
-            metadata_path_cache[tag.title].append(path)
+            for tag_type in tag_types:
+                try:
+                    metadata_path_cache[tag_type][metadata[tag_type][0]].append(path)
+                except:
+                    metadata_path_cache[tag_type]['None'].append(path)
 
             cached_files += 1
             if cached_files % 100 == 0: print(f"Files cached: {cached_files}")
@@ -35,30 +38,32 @@ def build_cache(libraries):
 
 
 
+def search_cache(song_tags):
 
-def search_cache(albumartist, year, album, artist, title):
-    perfect_match = list(set(metadata_path_cache[albumartist]) & set(metadata_path_cache[year]) & set(metadata_path_cache[artist]) & set(metadata_path_cache[album]) & set(metadata_path_cache[title]))
+    perfect_match = set(metadata_path_cache['albumartist'][song_tags['albumartist']])
+    for tag_type in tag_types:
+        tag = song_tags[tag_type]
+        perfect_match = set(perfect_match) & set(metadata_path_cache[tag_type][tag])
 
-    if perfect_match: return perfect_match
+    if perfect_match: return list(perfect_match)
 
     match_scores = defaultdict(int) 
-    match_sets = {albumartist, year, album, artist, title}
     max = ""
-    for match_set in match_sets:
-        for match in metadata_path_cache[match_set]:
+    for tag_type in tag_types:
+        tag = song_tags[tag_type]
+        for match in metadata_path_cache[tag_type][tag]:
 
             match_scores[match] += 1
 
-            '''
-            TODO: the ranking of imperfect matches works well enough, however it may have a bias towards matches where multiple tags share a value (ex: artist/albumartist), needs testing
-            '''
-            if match_set is not year:
+            if tag_type != 'year':
                 match_scores[match] += 1
 
             if match_scores[match] > match_scores[max] : max = match
 
-    print(f"\nCould not find perfect match for:\n    ALBUMARTIST={albumartist} YEAR={year} ALBUM={album} ARTIST={artist} TITLE={title}")
+    print(f"\nCould not find perfect match for:")
+    print(get_comment(song_tags), end="")
     print("\n    Is '" + str(max) + "' OK? (y/n)")
+    print(get_comment(get_tags_from(max)), end="")
 
     response = input()
     if response.lower() == "y":
@@ -73,25 +78,40 @@ def search_cache(albumartist, year, album, artist, title):
     response = input()
 
     if response.lower() == "s":
-        print(f"ERROR: could not find match for: ALBUMARTIST={albumartist}, YEAR={year}, ALBUM={album}, ARTIST={artist}, TITLE={title}")
+        print(get_comment(song_tags), end="")
         return list({})
     
     return list({list(sorted_matches)[int(response)]})
 
 
+def get_tags_from(path):
+    tag: TinyTag = TinyTag.get(path)
+    metadata: dict = tag.as_dict()
+    song_tags = {}
+    for tag_type in tag_types:
+        try:
+            song_tags[tag_type] = metadata[tag_type][0]
+        except:
+            song_tags[tag_type] = 'None'
 
+    return song_tags
 
-def get_metadata(line):
-    dict = defaultdict(list)
+def read_comment(line):
+    dict = {}
     dict["albumartist"] = line.split(" ALBUMARTIST=")[1].split(" YEAR=")[0]
     dict["year"] = line.split(" YEAR=")[1].split(" ALBUM=")[0]
-    dict["artist"] = line.split(" ALBUM=")[1].split(" ARTIST=")[0]
-    dict["album"] = line.split(" ARTIST=")[1].split(" TITLE=")[0]
+    dict["album"] = line.split(" ALBUM=")[1].split(" ARTIST=")[0]
+    dict["artist"] = line.split(" ARTIST=")[1].split(" TITLE=")[0]
     dict["title"] = line.split(" TITLE=")[1].rstrip("\n")
     return dict
 
-def get_comment(albumartist, year, album, artist, title):
-    return str(f'# ALBUMARTIST={albumartist} YEAR={year} ALBUM={artist} ARTIST={album} TITLE={title}\n')
+def get_comment(song_tags):
+    comment = '# '
+    for tag_type in tag_types:
+        comment += str(tag_type.upper()) + "="
+        comment += str(song_tags[tag_type]) + " " 
+    return comment.rstrip() + "\n"
+
 
 def process_m3u(m3u_path, libraries, relative):
     tmp_path = ".tmp_m3u"
@@ -121,8 +141,9 @@ def process_m3u(m3u_path, libraries, relative):
             continue
 
         if is_unbroken_path:
-            tag: TinyTag = TinyTag.get(fixed_path)
-            new_comment = get_comment(tag.albumartist, tag.year, tag.artist, tag.album, tag.title)
+            song_tags = get_tags_from(fixed_path)
+
+            new_comment = get_comment(song_tags)
 
             tmp.write(new_comment)
             tmp.write(line)
@@ -137,8 +158,8 @@ def process_m3u(m3u_path, libraries, relative):
 
         build_cache(libraries)
 
-        tags = get_metadata(prevline)
-        found_paths = search_cache(tags["albumartist"], tags["year"], tags["album"], tags["artist"], tags["title"])
+        tags = read_comment(prevline)
+        found_paths = search_cache(tags)
 
         if not found_paths:
             tmp.write(prevline)
@@ -150,8 +171,8 @@ def process_m3u(m3u_path, libraries, relative):
 
         rel_path = os.path.relpath(found_path, Path(m3u_path).parent) + '\n'
 
-        tag: TinyTag = TinyTag.get(found_path)
-        new_comment = (get_comment(tag.albumartist, tag.year, tag.artist, tag.album, tag.title))
+        song_tags = get_tags_from(found_path)
+        new_comment = (get_comment(song_tags))
 
         tmp.write(new_comment)
 
