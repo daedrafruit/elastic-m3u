@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 import os
 
-def fix(m3u_path, base):
+def fix(m3u_path, bases):
     tmp_path = ".tmp_m3u"
     if os.path.isfile(tmp_path): os.remove(tmp_path)
     tmp = open(tmp_path, "x")
@@ -16,7 +16,12 @@ def fix(m3u_path, base):
             tmp.write(line)
             continue
 
-        new_line = "a:/" + base + line.split(base)[1]
+        matched_base = next((b for b in bases if b in line), None)
+        if matched_base is None:
+            print(f"  Warning: no known base found in line, skipping: {line.strip()}")
+            tmp.write(line)
+            continue
+        new_line = "a:/" + matched_base + line.split(matched_base)[1]
         tmp.write(new_line.replace('/', '\\'))
     os.remove(m3u_path)
     os.rename(tmp_path, m3u_path)
@@ -25,7 +30,7 @@ def fix(m3u_path, base):
 
 parser = argparse.ArgumentParser(prog='elastic-m3u')
 parser.add_argument('-p', '--playlists', required=True, nargs='*')
-parser.add_argument('-b', '--base', required=True)
+parser.add_argument('-b', '--base', required=True, nargs='+')
 args = parser.parse_args()
 
 for playlist_arg in args.playlists:
