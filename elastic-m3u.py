@@ -4,8 +4,8 @@ from pathlib import Path
 from collections import defaultdict
 import argparse
 
-audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff"}
-tag_types = ['albumartist', 'year', 'album', 'track', 'artist', 'title']
+audio_extentions = {".ogg" , ".mp3", ".acc", ".wav", ".flac", ".aiff", ".m4a", ".opus"}
+tag_types = ['albumartist', 'year', 'album', 'artist', 'title']
 
 metadata_path_cache = defaultdict(lambda: defaultdict(list))
 
@@ -17,7 +17,7 @@ def clean_tag(song_tags, tag_type):
         else:
             return str(tag)
     except:
-        return 'None' 
+        return 'no ' + tag_type 
 
 global cache_built
 def build_cache(libraries):
